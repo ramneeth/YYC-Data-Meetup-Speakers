@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="="en">
+<head>
+  <meta charset="UTF-8">
+  <title>YYC Data Speakers</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    h1, h3 {
+      font-weight: 600;
+    }
+    .card {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      border: none;
+      border-radius: 1rem;
+    }
+    .card-body {
+      padding: 1.5rem;
+    }
+    .badge {
+      margin: 2px 5px 2px 0;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .badge:hover {
+      opacity: 0.85;
+    }
+    .form-control, .btn {
+      border-radius: 0.5rem;
+    }
+    #formMessage {
+      font-weight: 500;
+    }
+    .section-title {
+      margin-top: 4rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 2px solid #dee2e6;
+      padding-bottom: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container py-5">
+
+    <h1 class="text-center mb-4">🎤 YYC Data Speaker Directory</h1>
+
+    <!-- 🔍 Search -->
+    <div class="mb-4">
+      <input type="text" id="searchInput" class="form-control form-control-lg" placeholder="Search by name, talk, or tag...">
+    </div>
+
+    <!-- 🏷️ Tag Filters -->
+    <div id="tagFilters" class="mb-5 text-center"></div>
+
+    <!-- 📋 Speaker List -->
+    <div id="speakerList" class="row row-cols-1 row-cols-md-2 g-4 mb-5"></div>
+
+    <!-- ➕ Add New Speaker -->
+    <h3 class="section-title">Add a New Speaker</h3>
+
+    <form id="speakerForm">
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-control" id="name" required>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Contact</label>
+          <input type="email" class="form-control" id="contact" required>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Talk Title</label>
+        <input type="text" class="form-control" id="talk" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Tags (comma-separated)</label>
+        <input type="text" class="form-control" id="tags">
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg px-4">Submit Speaker</button>
+      <div id="formMessage" class="mt-3 text-success" style="display:none;">✅ Speaker added! Refresh the page to see the update.</div>
+    </form>
+
+  </div>
+  <script>
+    const correctPassword = "dataonly"; // 🔒 Set your password here
+  
+    const userInput = prompt("This speaker list is private. Please enter the password:");
+    if (userInput !== correctPassword) {
+      alert("Access denied.");
+      document.body.innerHTML = "<h2 style='text-align:center;margin-top:50px;'>🔒 Access Denied</h2>";
+    }
+  </script>
+  
+  <!-- JS -->
+  <script>
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbwXBJZ2zJUtyjtQLv_f0yWZTAHHnfvkmsy6QOHBVfR1hekXOermVdYfBm4TTrYUqkTnrg/exec'; // Replace with your actual URL
+    const speakerList = document.getElementById('speakerList');
+    const formMessage = document.getElementById('formMessage');
+    const searchInput = document.getElementById('searchInput');
+    
+    function debounce(func, delay) {
+      let timeoutId;
+      return function(...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => func.apply(this, args), delay);
+      };
+    }
+
+    function createSpeakerCard(speaker) {
+      const card = document.createElement('div');
+      card.className = 'col speaker-card';
+      card.setAttribute('data-tags', (speaker.Tags || '').toLowerCase());
+
+      card.innerHTML = `
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">${speaker.Name}</h5>
+            <p class="card-text mb-1"><strong>Contact:</strong> ${speaker.Contact}</p>
+            <p class="card-text mb-2"><strong>Talk:</strong> ${speaker["Talk Title"]}</p>
+            <div>
+              ${(speaker.Tags || '').split(',').map(tag =>
+                `<span class="badge bg-info text-dark">${tag.trim()}</span>`
+              ).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+      return card;
+    }
+
+    function loadSpeakers(filterTag = '', searchText = '') {
+      fetch(scriptUrl)
+        .then(response => response.json())
+        .then(data => {
+          speakerList.innerHTML = '';
+          const allTags = new Set();
+
+          // Normalize search text
+          const searchWords = searchText.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+          data.forEach(speaker => {
+            const name = (speaker.Name || '').toLowerCase();
+            const contact = (speaker.Contact || '').toLowerCase();
+            const talk = (speaker["Talk Title"] || '').toLowerCase();
+            const tags = (speaker.Tags || '').toLowerCase();
+
+            const combinedText = `${name} ${contact} ${talk} ${tags}`;
+
+            const matchesSearch = searchWords.every(word => combinedText.includes(word));
+            const matchesTag = !filterTag || tags.includes(filterTag);
+
+            // Collect tags for the filter buttons
+            (speaker.Tags || '').split(',').forEach(tag => allTags.add(tag.trim()));
+
+            if (matchesSearch && matchesTag) {
+              speakerList.appendChild(createSpeakerCard(speaker));
+            }
+          });
+
+          renderTagButtons(Array.from(allTags));
+        })
+        .catch(error => {
+          console.error("❌ Error loading speakers:", error);
+          alert("Could not load speaker list.");
+      });
+}
+
+
+    function renderTagButtons(tags) {
+      const container = document.getElementById('tagFilters');
+      container.innerHTML = `<span class="badge bg-secondary tag-filter me-2 mb-2" data-tag="">All</span>` +
+        tags.map(tag =>
+          `<span class="badge bg-light text-dark border tag-filter me-2 mb-2" data-tag="${tag.toLowerCase()}">${tag}</span>`
+        ).join('');
+    }
+
+    // Search
+    searchInput.addEventListener('input', debounce(function () {
+      const text = this.value.toLowerCase();
+      loadSpeakers(currentTag, text);
+    }, 300));
+
+
+    // Tag Filter
+    document.addEventListener('click', function (e) {
+      if (e.target.classList.contains('tag-filter')) {
+        currentTag = e.target.getAttribute('data-tag');
+        loadSpeakers(currentTag, searchInput.value.toLowerCase());
+      }
+    });
+
+    // Submit Speaker
+    document.getElementById('speakerForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const newSpeaker = {
+        Name: document.getElementById('name').value,
+        Contact: document.getElementById('contact').value,
+        "Talk Title": document.getElementById('talk').value,
+        Tags: document.getElementById('tags').value
+      };
+
+      fetch(scriptUrl, {
+        method: 'POST',
+        body: JSON.stringify(newSpeaker),
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(res => res.text())
+      .then(() => {
+        formMessage.style.display = 'block';
+        document.getElementById('speakerForm').reset();
+        loadSpeakers(); // Auto-refresh list
+      })
+      .catch(err => {
+        console.error("❌ Error submitting speaker:", err);
+        alert("Could not submit.");
+      });
+    });
+
+    // Initial Load
+    let currentTag = '';
+    loadSpeakers();
+  </script>
+<div class="text-center mt-5 mb-3">
+  <a href="https://docs.google.com/spreadsheets/d/1yYJzU58ddMgIxZdw6BToTfV7oKaU7yN6MpGkN5YqY4k/edit?usp=sharing" class="btn btn-outline-secondary" target="_blank">
+    🔗 View Google Sheet (Read-Only)
+  </a>
+</div>
+
+</body>
+</html>
